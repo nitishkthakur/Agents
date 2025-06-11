@@ -5,3 +5,4 @@ ollama
 langchain-community
 langchain-ollama
 tavily-python
+python-dotenv
