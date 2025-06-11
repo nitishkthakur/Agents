@@ -4,3 +4,4 @@ pandas
 ollama
 langchain-community
 langchain-ollama
+tavily-python
