@@ -1,0 +1,16 @@
+fastapi>=0.109.0
+uvicorn>=0.27.0
+python-dotenv>=1.0.0
+deepagents>=0.1.0
+langchain>=0.3.0
+langchain-anthropic>=0.3.0
+langchain-openai>=0.3.0
+langchain-groq>=0.2.0
+tavily-python>=0.5.0
+python-multipart>=0.0.9
+pypdf>=4.0.0
+pdf2image>=1.17.0
+Pillow>=10.0.0
+reportlab>=4.0.0
+aiofiles>=23.0.0
+sse-starlette>=2.0.0
