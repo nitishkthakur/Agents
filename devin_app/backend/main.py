@@ -223,9 +223,24 @@ async def chat(request: ChatRequest):
                     chunk = event.get("data", {}).get("chunk")
                     if chunk and hasattr(chunk, "content") and chunk.content:
                         content = chunk.content
+                        # Handle string content (OpenAI, Groq, etc.)
                         if isinstance(content, str):
                             full_response += content
                             yield f"data: {json.dumps({'type': 'content', 'content': content})}\n\n"
+                        # Handle list of content blocks (Claude/Anthropic models)
+                        elif isinstance(content, list):
+                            for block in content:
+                                if isinstance(block, dict) and block.get("type") == "text":
+                                    text = block.get("text", "")
+                                    if text:
+                                        full_response += text
+                                        yield f"data: {json.dumps({'type': 'content', 'content': text})}\n\n"
+                                elif hasattr(block, "text"):
+                                    # Handle content block objects
+                                    text = block.text
+                                    if text:
+                                        full_response += text
+                                        yield f"data: {json.dumps({'type': 'content', 'content': text})}\n\n"
                 
                 elif kind == "on_tool_start":
                     tool_name = event.get("name", "")
