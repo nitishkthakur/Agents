@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Devin Agent</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+</head>
+<body>
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1>Devin Agent</h1>
+            </div>
+            <button class="new-chat-btn" onclick="startNewChat()">
+                <span class="icon">+</span>
+                New Chat
+            </button>
+            <div class="sidebar-section">
+                <h3>Settings</h3>
+                <div class="setting-item">
+                    <label for="model-select">Model</label>
+                    <select id="model-select"></select>
+                </div>
+                <div class="setting-item">
+                    <label class="toggle-label">
+                        <input type="checkbox" id="web-search-toggle" checked>
+                        <span class="toggle-text">Web Search</span>
+                    </label>
+                </div>
+            </div>
+            <div class="sidebar-section">
+                <h3>Actions</h3>
+                <button class="action-btn" onclick="downloadConversation()">
+                    <span class="icon">D</span>
+                    Download as PDF
+                </button>
+                <button class="action-btn" onclick="viewArtifacts()">
+                    <span class="icon">F</span>
+                    View Artifacts
+                </button>
+            </div>
+        </aside>
+        
+        <main class="chat-container">
+            <div class="chat-header">
+                <span id="current-model">Loading models...</span>
+            </div>
+            
+            <div class="messages-container" id="messages-container">
+                <div class="welcome-message">
+                    <h2>Welcome to Devin Agent</h2>
+                    <p>Start a conversation by typing a message below. You can:</p>
+                    <ul>
+                        <li>Ask questions and get AI-powered responses</li>
+                        <li>Upload PDF files for analysis</li>
+                        <li>Enable web search for current information</li>
+                        <li>Save and manage artifacts</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="input-container">
+                <div class="file-upload-area" id="file-upload-area">
+                    <input type="file" id="file-input" accept=".pdf" onchange="handleFileUpload(event)">
+                    <div class="uploaded-file" id="uploaded-file" style="display: none;">
+                        <span class="file-name" id="file-name"></span>
+                        <button class="remove-file" onclick="removeUploadedFile()">x</button>
+                    </div>
+                </div>
+                <div class="input-wrapper">
+                    <label for="file-input" class="upload-btn" title="Upload PDF">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                        </svg>
+                    </label>
+                    <textarea 
+                        id="message-input" 
+                        placeholder="Type your message..." 
+                        rows="1"
+                        onkeydown="handleKeyDown(event)"
+                        oninput="autoResize(this)"
+                    ></textarea>
+                    <button class="send-btn" onclick="sendMessage()" id="send-btn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <div class="modal" id="artifacts-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Artifacts</h2>
+                <button class="modal-close" onclick="closeArtifactsModal()">x</button>
+            </div>
+            <div class="modal-body" id="artifacts-list">
+                Loading artifacts...
+            </div>
+        </div>
+    </div>
+    
+    <div class="modal" id="artifact-view-modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2 id="artifact-view-title">Artifact</h2>
+                <button class="modal-close" onclick="closeArtifactViewModal()">x</button>
+            </div>
+            <div class="modal-body">
+                <pre id="artifact-content"></pre>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
