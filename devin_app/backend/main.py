@@ -361,13 +361,14 @@ def format_content_for_pdf(content: str, base_style, styles):
     # Convert HTML line breaks to actual newlines for processing
     content = content.replace("<br/>", "\n").replace("<br>", "\n")
     
-    # Escape HTML entities first, but preserve what we'll use for formatting
-    content = content.replace("&", "&amp;")
+    # Escape HTML entities - do angle brackets first, then ampersand
+    # This prevents double-escaping of existing entities
     content = content.replace("<", "&lt;").replace(">", "&gt;")
+    content = content.replace("&", "&amp;")
     
     # Now unescape the tags we want to use for formatting
-    content = content.replace("&lt;b&gt;", "<b>").replace("&lt;/b&gt;", "</b>")
-    content = content.replace("&lt;i&gt;", "<i>").replace("&lt;/i&gt;", "</i>")
+    content = content.replace("&amp;lt;b&amp;gt;", "<b>").replace("&amp;lt;/b&amp;gt;", "</b>")
+    content = content.replace("&amp;lt;i&amp;gt;", "<i>").replace("&amp;lt;/i&amp;gt;", "</i>")
     
     # Split content into lines to process line by line
     lines = content.split('\n')
@@ -423,12 +424,15 @@ def format_content_for_pdf(content: str, base_style, styles):
             story_elements.append(Spacer(1, 6))
         # Regular paragraph
         else:
-            # Handle inline markdown bold (**text** or __text__)
-            line = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', line)
-            line = re.sub(r'__(.+?)__', r'<b>\1</b>', line)
-            # Handle inline markdown italic (*text* or _text_)
-            line = re.sub(r'\*(.+?)\*', r'<i>\1</i>', line)
-            line = re.sub(r'_(.+?)_', r'<i>\1</i>', line)
+            # Handle inline markdown formatting
+            # Process in order: bold with **, bold with __, italic with *, italic with _
+            # Use more specific patterns to avoid conflicts and improve efficiency
+            line = re.sub(r'\*\*([^*]+?)\*\*', r'<b>\1</b>', line)
+            line = re.sub(r'__([^_]+?)__', r'<b>\1</b>', line)
+            # For italic, avoid single underscores that might be part of variable names
+            # by requiring word boundaries or spaces
+            line = re.sub(r'(?<!\w)\*([^*]+?)\*(?!\w)', r'<i>\1</i>', line)
+            line = re.sub(r'(?<!\w)_([^_]+?)_(?!\w)', r'<i>\1</i>', line)
             
             story_elements.append(Paragraph(line, base_style))
         
