@@ -224,6 +224,8 @@ function addMessage(role, content, isLoading = false) {
         `;
     } else {
         contentDiv.innerHTML = renderMarkdown(content);
+        // Store original markdown content for later retrieval
+        contentDiv.setAttribute('data-original-content', content);
     }
     
     messageDiv.appendChild(headerDiv);
@@ -248,6 +250,8 @@ function updateMessageContent(messageId, content) {
     }
     
     contentDiv.innerHTML = renderMarkdown(content);
+    // Store original markdown content for later retrieval
+    contentDiv.setAttribute('data-original-content', content);
     
     const messagesContainer = document.getElementById('messages-container');
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
@@ -786,11 +790,17 @@ function getCurrentMessages() {
         const role = el.classList.contains('user') ? 'user' : 'assistant';
         const contentEl = el.querySelector('.message-content');
         if (contentEl) {
-            // Get text content, removing progress indicators
-            const clone = contentEl.cloneNode(true);
-            const progressContainer = clone.querySelector('.progress-container');
-            if (progressContainer) progressContainer.remove();
-            messages.push({ role, content: clone.textContent.trim() });
+            // Get original markdown content if available, otherwise fall back to text content
+            const originalContent = contentEl.getAttribute('data-original-content');
+            if (originalContent) {
+                messages.push({ role, content: originalContent });
+            } else {
+                // Fallback for messages without stored original content
+                const clone = contentEl.cloneNode(true);
+                const progressContainer = clone.querySelector('.progress-container');
+                if (progressContainer) progressContainer.remove();
+                messages.push({ role, content: clone.textContent.trim() });
+            }
         }
     });
     
