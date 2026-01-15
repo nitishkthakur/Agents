@@ -146,10 +146,16 @@ async function sendMessage() {
                         if (data.type === 'content') {
                             fullContent += data.content;
                             updateMessageContent(assistantMessageId, fullContent);
+                        } else if (data.type === 'progress') {
+                            addProgressStep(assistantMessageId, data.step, data.description, true);
                         } else if (data.type === 'tool_start') {
-                            showToolIndicator(assistantMessageId, data.tool, true);
+                            showToolIndicator(assistantMessageId, data.tool, true, data.description);
                         } else if (data.type === 'tool_end') {
                             showToolIndicator(assistantMessageId, data.tool, false);
+                        } else if (data.type === 'chain_start') {
+                            addProgressStep(assistantMessageId, 'chain', `Running: ${data.name}`, true);
+                        } else if (data.type === 'chain_end') {
+                            updateProgressStep(assistantMessageId, 'chain', `Completed: ${data.name}`, true);
                         } else if (data.type === 'done') {
                             currentConversationId = data.conversation_id;
                         } else if (data.type === 'error') {
@@ -249,34 +255,138 @@ function removeLoadingIndicator(messageId) {
     }
 }
 
-function showToolIndicator(messageId, toolName, isActive) {
+function getOrCreateProgressContainer(messageId) {
+    const messageDiv = document.getElementById(messageId);
+    if (!messageDiv) return null;
+    
+    const contentDiv = messageDiv.querySelector('.message-content');
+    if (!contentDiv) return null;
+    
+    let progressContainer = contentDiv.querySelector('.progress-container');
+    if (!progressContainer) {
+        progressContainer = document.createElement('div');
+        progressContainer.className = 'progress-container';
+        
+        const header = document.createElement('div');
+        header.className = 'progress-header';
+        header.textContent = 'Progress';
+        progressContainer.appendChild(header);
+        
+        const loadingIndicator = contentDiv.querySelector('.loading-indicator');
+        if (loadingIndicator) {
+            contentDiv.insertBefore(progressContainer, loadingIndicator);
+        } else {
+            contentDiv.insertBefore(progressContainer, contentDiv.firstChild);
+        }
+    }
+    return progressContainer;
+}
+
+function addProgressStep(messageId, stepNumber, description, isActive = true) {
+    const progressContainer = getOrCreateProgressContainer(messageId);
+    if (!progressContainer) return;
+    
+    // Check if step already exists
+    let stepDiv = progressContainer.querySelector(`.progress-step[data-step="${stepNumber}"]`);
+    
+    if (!stepDiv) {
+        stepDiv = document.createElement('div');
+        stepDiv.className = 'progress-step' + (isActive ? ' active' : '');
+        stepDiv.setAttribute('data-step', stepNumber);
+        
+        const stepNum = document.createElement('span');
+        stepNum.className = 'progress-step-number';
+        stepNum.textContent = stepNumber;
+        
+        const stepText = document.createElement('span');
+        stepText.className = 'progress-step-text';
+        stepText.textContent = description;
+        
+        stepDiv.appendChild(stepNum);
+        stepDiv.appendChild(stepText);
+        progressContainer.appendChild(stepDiv);
+    } else {
+        // Update existing step
+        const stepText = stepDiv.querySelector('.progress-step-text');
+        if (stepText) {
+            stepText.textContent = description;
+        }
+    }
+    
+    // Scroll to keep progress visible
+    const messagesContainer = document.getElementById('messages-container');
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+function updateProgressStep(messageId, stepNumber, description, isComplete = false) {
     const messageDiv = document.getElementById(messageId);
     if (!messageDiv) return;
     
-    const contentDiv = messageDiv.querySelector('.message-content');
-    if (!contentDiv) return;
+    const progressContainer = messageDiv.querySelector('.progress-container');
+    if (!progressContainer) return;
     
-    let toolIndicator = contentDiv.querySelector(`.tool-indicator[data-tool="${toolName}"]`);
+    const stepDiv = progressContainer.querySelector(`.progress-step[data-step="${stepNumber}"]`);
+    if (stepDiv) {
+        stepDiv.className = 'progress-step' + (isComplete ? ' complete' : ' active');
+        const stepText = stepDiv.querySelector('.progress-step-text');
+        if (stepText && description) {
+            stepText.textContent = description;
+        }
+    }
+}
+
+function addToolProgress(messageId, toolName, description, isActive = true) {
+    const progressContainer = getOrCreateProgressContainer(messageId);
+    if (!progressContainer) return;
+    
+    const toolId = `tool-${toolName}-${Date.now()}`;
     
     if (isActive) {
-        if (!toolIndicator) {
-            toolIndicator = document.createElement('div');
-            toolIndicator.className = 'tool-indicator active';
-            toolIndicator.setAttribute('data-tool', toolName);
-            toolIndicator.textContent = `Using: ${toolName}...`;
-            
-            const loadingIndicator = contentDiv.querySelector('.loading-indicator');
-            if (loadingIndicator) {
-                contentDiv.insertBefore(toolIndicator, loadingIndicator);
-            } else {
-                contentDiv.insertBefore(toolIndicator, contentDiv.firstChild);
-            }
-        }
+        const stepDiv = document.createElement('div');
+        stepDiv.className = 'progress-step active';
+        stepDiv.setAttribute('data-tool', toolName);
+        stepDiv.setAttribute('data-tool-id', toolId);
+        
+        const stepNum = document.createElement('span');
+        stepNum.className = 'progress-step-number';
+        stepNum.innerHTML = '&#8226;'; // bullet point for tools
+        
+        const stepText = document.createElement('span');
+        stepText.className = 'progress-step-text';
+        stepText.textContent = description || `Using ${toolName}...`;
+        
+        stepDiv.appendChild(stepNum);
+        stepDiv.appendChild(stepText);
+        progressContainer.appendChild(stepDiv);
+    }
+    
+    // Scroll to keep progress visible
+    const messagesContainer = document.getElementById('messages-container');
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    
+    return toolId;
+}
+
+function completeToolProgress(messageId, toolName) {
+    const messageDiv = document.getElementById(messageId);
+    if (!messageDiv) return;
+    
+    const progressContainer = messageDiv.querySelector('.progress-container');
+    if (!progressContainer) return;
+    
+    // Find the most recent active tool step with this name
+    const toolSteps = progressContainer.querySelectorAll(`.progress-step.active[data-tool="${toolName}"]`);
+    if (toolSteps.length > 0) {
+        const lastStep = toolSteps[toolSteps.length - 1];
+        lastStep.className = 'progress-step complete';
+    }
+}
+
+function showToolIndicator(messageId, toolName, isActive, description = null) {
+    if (isActive) {
+        addToolProgress(messageId, toolName, description, true);
     } else {
-        if (toolIndicator) {
-            toolIndicator.className = 'tool-indicator complete';
-            toolIndicator.textContent = `Used: ${toolName}`;
-        }
+        completeToolProgress(messageId, toolName);
     }
 }
 

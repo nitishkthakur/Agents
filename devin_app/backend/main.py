@@ -124,7 +124,15 @@ Be helpful, accurate, and thorough in your responses."""
 
 def create_agent_for_model(model_id: str):
     """Create a deep agent with the specified model."""
-    model = init_chat_model(model=model_id)
+    # Handle Ollama models - they need base_url configuration
+    if model_id.startswith("ollama:"):
+        ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+        model = init_chat_model(
+            model=model_id,
+            base_url=ollama_base_url
+        )
+    else:
+        model = init_chat_model(model=model_id)
     
     tools = [internet_search, save_artifact, list_artifacts, read_artifact]
     
@@ -196,6 +204,8 @@ async def chat(request: ChatRequest):
             ]
             
             full_response = ""
+            llm_call_count = 0
+            current_step = ""
             
             async for event in agent.astream_events(
                 {"messages": messages},
@@ -203,7 +213,13 @@ async def chat(request: ChatRequest):
             ):
                 kind = event.get("event")
                 
-                if kind == "on_chat_model_stream":
+                if kind == "on_chat_model_start":
+                    llm_call_count += 1
+                    model_name = event.get("name", "LLM")
+                    step_desc = f"Step {llm_call_count}: Processing with {model_name}"
+                    yield f"data: {json.dumps({'type': 'progress', 'step': llm_call_count, 'description': step_desc})}\n\n"
+                
+                elif kind == "on_chat_model_stream":
                     chunk = event.get("data", {}).get("chunk")
                     if chunk and hasattr(chunk, "content") and chunk.content:
                         content = chunk.content
@@ -213,18 +229,45 @@ async def chat(request: ChatRequest):
                 
                 elif kind == "on_tool_start":
                     tool_name = event.get("name", "")
-                    yield f"data: {json.dumps({'type': 'tool_start', 'tool': tool_name})}\n\n"
+                    tool_input = event.get("data", {}).get("input", {})
+                    # Extract a brief description of what the tool is doing
+                    tool_desc = ""
+                    if tool_name == "internet_search" and isinstance(tool_input, dict):
+                        query = tool_input.get("query", "")
+                        tool_desc = f"Searching: {query[:50]}..." if len(query) > 50 else f"Searching: {query}"
+                    elif tool_name == "save_artifact" and isinstance(tool_input, dict):
+                        filename = tool_input.get("filename", "")
+                        tool_desc = f"Saving artifact: {filename}"
+                    elif tool_name == "read_artifact" and isinstance(tool_input, dict):
+                        filename = tool_input.get("filename", "")
+                        tool_desc = f"Reading artifact: {filename}"
+                    elif tool_name == "list_artifacts":
+                        tool_desc = "Listing saved artifacts"
+                    else:
+                        tool_desc = f"Using {tool_name}"
+                    
+                    yield f"data: {json.dumps({'type': 'tool_start', 'tool': tool_name, 'description': tool_desc})}\n\n"
                 
                 elif kind == "on_tool_end":
                     tool_name = event.get("name", "")
                     yield f"data: {json.dumps({'type': 'tool_end', 'tool': tool_name})}\n\n"
+                
+                elif kind == "on_chain_start":
+                    chain_name = event.get("name", "")
+                    if chain_name and chain_name not in ["RunnableSequence", "RunnableLambda"]:
+                        yield f"data: {json.dumps({'type': 'chain_start', 'name': chain_name})}\n\n"
+                
+                elif kind == "on_chain_end":
+                    chain_name = event.get("name", "")
+                    if chain_name and chain_name not in ["RunnableSequence", "RunnableLambda"]:
+                        yield f"data: {json.dumps({'type': 'chain_end', 'name': chain_name})}\n\n"
             
             conversations[conversation_id]["messages"].append({
                 "role": "assistant",
                 "content": full_response
             })
             
-            yield f"data: {json.dumps({'type': 'done', 'conversation_id': conversation_id})}\n\n"
+            yield f"data: {json.dumps({'type': 'done', 'conversation_id': conversation_id, 'total_steps': llm_call_count})}\n\n"
             
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
