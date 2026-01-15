@@ -22,6 +22,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_LEFT
+import re
 
 load_dotenv()
 
@@ -350,6 +351,92 @@ async def upload_file(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def format_content_for_pdf(content: str, base_style, styles):
+    """
+    Convert markdown and HTML formatted content to ReportLab story elements.
+    Returns a list of Paragraph and Spacer objects.
+    """
+    story_elements = []
+    
+    # Convert HTML line breaks to actual newlines for processing
+    content = content.replace("<br/>", "\n").replace("<br>", "\n")
+    
+    # Escape HTML entities first, but preserve what we'll use for formatting
+    content = content.replace("&", "&amp;")
+    content = content.replace("<", "&lt;").replace(">", "&gt;")
+    
+    # Now unescape the tags we want to use for formatting
+    content = content.replace("&lt;b&gt;", "<b>").replace("&lt;/b&gt;", "</b>")
+    content = content.replace("&lt;i&gt;", "<i>").replace("&lt;/i&gt;", "</i>")
+    
+    # Split content into lines to process line by line
+    lines = content.split('\n')
+    
+    # Define styles for different heading levels
+    h2_style = ParagraphStyle(
+        'H2Style',
+        parent=styles['Heading2'],
+        fontSize=14,
+        spaceAfter=10,
+        spaceBefore=10,
+        leftIndent=base_style.leftIndent,
+    )
+    
+    h3_style = ParagraphStyle(
+        'H3Style',
+        parent=styles['Heading3'],
+        fontSize=12,
+        spaceAfter=8,
+        spaceBefore=8,
+        leftIndent=base_style.leftIndent,
+    )
+    
+    list_style = ParagraphStyle(
+        'ListStyle',
+        parent=base_style,
+        leftIndent=base_style.leftIndent + 20,
+        bulletIndent=base_style.leftIndent + 10,
+    )
+    
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        
+        # Skip empty lines but add spacing
+        if not line:
+            i += 1
+            continue
+            
+        # Handle markdown headings
+        if line.startswith('## '):
+            heading_text = line[3:].strip()
+            story_elements.append(Paragraph(f"<b>{heading_text}</b>", h2_style))
+        elif line.startswith('### '):
+            heading_text = line[4:].strip()
+            story_elements.append(Paragraph(f"<b>{heading_text}</b>", h3_style))
+        # Handle list items
+        elif line.startswith('- '):
+            list_text = line[2:].strip()
+            story_elements.append(Paragraph(f"• {list_text}", list_style))
+        # Handle horizontal rules
+        elif line.strip() == '---':
+            story_elements.append(Spacer(1, 6))
+        # Regular paragraph
+        else:
+            # Handle inline markdown bold (**text** or __text__)
+            line = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', line)
+            line = re.sub(r'__(.+?)__', r'<b>\1</b>', line)
+            # Handle inline markdown italic (*text* or _text_)
+            line = re.sub(r'\*(.+?)\*', r'<i>\1</i>', line)
+            line = re.sub(r'_(.+?)_', r'<i>\1</i>', line)
+            
+            story_elements.append(Paragraph(line, base_style))
+        
+        i += 1
+    
+    return story_elements
+
+
 @app.post("/download-pdf")
 async def download_conversation_pdf(request: DownloadRequest):
     """Download conversation as PDF."""
@@ -399,15 +486,17 @@ async def download_conversation_pdf(request: DownloadRequest):
     
     for msg in conversation["messages"]:
         role = msg["role"].upper()
-        content = msg["content"].replace("\n", "<br/>")
-        content = content.replace("<", "&lt;").replace(">", "&gt;").replace("<br/>", "<br/>")
+        content = msg["content"]
         
-        if msg["role"] == "user":
-            story.append(Paragraph(f"<b>{role}:</b>", styles['Normal']))
-            story.append(Paragraph(content, user_style))
-        else:
-            story.append(Paragraph(f"<b>{role}:</b>", styles['Normal']))
-            story.append(Paragraph(content, assistant_style))
+        # Add role label
+        story.append(Paragraph(f"<b>{role}:</b>", styles['Normal']))
+        
+        # Use the appropriate style for the role
+        base_style = user_style if msg["role"] == "user" else assistant_style
+        
+        # Format content and add to story
+        formatted_elements = format_content_for_pdf(content, base_style, styles)
+        story.extend(formatted_elements)
         
         story.append(Spacer(1, 10))
     
