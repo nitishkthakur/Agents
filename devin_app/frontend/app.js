@@ -1,9 +1,11 @@
 const API_BASE_URL = 'http://localhost:8000';
+const STORAGE_KEY = 'devin_agent_conversations';
 
 let currentConversationId = null;
 let currentModel = null;
 let uploadedFileData = null;
 let isStreaming = false;
+let conversations = {}; // In-memory store of all conversations
 
 marked.setOptions({
     highlight: function(code, lang) {
@@ -178,6 +180,12 @@ async function sendMessage() {
         updateSendButton();
         uploadedFileData = null;
         removeUploadedFile();
+        
+        // Save conversation to history
+        const messages = getCurrentMessages();
+        if (messages.length > 0) {
+            saveCurrentConversation(messages);
+        }
     }
 }
 
@@ -390,10 +398,58 @@ function showToolIndicator(messageId, toolName, isActive, description = null) {
     }
 }
 
+function preprocessLatex(content) {
+    if (!content) return '';
+    
+    // Protect code blocks from LaTeX processing
+    const codeBlocks = [];
+    let processed = content.replace(/```[\s\S]*?```/g, (match) => {
+        codeBlocks.push(match);
+        return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
+    });
+    
+    // Protect inline code
+    const inlineCode = [];
+    processed = processed.replace(/`[^`]+`/g, (match) => {
+        inlineCode.push(match);
+        return `__INLINE_CODE_${inlineCode.length - 1}__`;
+    });
+    
+    // Convert standalone [ and ] on their own lines to $$ delimiters for display math
+    // Match patterns like:\n[\nequation\n]\n
+    processed = processed.replace(/\n\s*\[\s*\n([\s\S]*?)\n\s*\]\s*\n/g, '\n$$\n$1\n$$\n');
+    
+    // Also handle [ at start of content
+    processed = processed.replace(/^\s*\[\s*\n([\s\S]*?)\n\s*\]\s*\n/g, '$$\n$1\n$$\n');
+    
+    // Convert \[ and \] to $$ for display math (in case they're escaped differently)
+    processed = processed.replace(/\\\[/g, '$$');
+    processed = processed.replace(/\\\]/g, '$$');
+    
+    // Convert \( and \) to $ for inline math
+    processed = processed.replace(/\\\(/g, '$');
+    processed = processed.replace(/\\\)/g, '$');
+    
+    // Restore code blocks
+    codeBlocks.forEach((block, i) => {
+        processed = processed.replace(`__CODE_BLOCK_${i}__`, block);
+    });
+    
+    // Restore inline code
+    inlineCode.forEach((code, i) => {
+        processed = processed.replace(`__INLINE_CODE_${i}__`, code);
+    });
+    
+    return processed;
+}
+
 function renderMarkdown(content) {
     if (!content) return '';
     
-    let html = marked.parse(content);
+    // Pre-process LaTeX delimiters
+    const processedContent = preprocessLatex(content);
+    
+    let html = marked.parse(processedContent);
     
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = html;
@@ -401,11 +457,10 @@ function renderMarkdown(content) {
     renderMathInElement(tempDiv, {
         delimiters: [
             {left: '$$', right: '$$', display: true},
-            {left: '$', right: '$', display: false},
-            {left: '\\[', right: '\\]', display: true},
-            {left: '\\(', right: '\\)', display: false}
+            {left: '$', right: '$', display: false}
         ],
-        throwOnError: false
+        throwOnError: false,
+        ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
     });
     
     return tempDiv.innerHTML;
@@ -603,6 +658,147 @@ document.addEventListener('click', (e) => {
     }
 });
 
+// Chat history functions
+function loadConversationsFromStorage() {
+    try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+            conversations = JSON.parse(stored);
+        }
+    } catch (e) {
+        console.error('Failed to load conversations from storage:', e);
+        conversations = {};
+    }
+}
+
+function saveConversationsToStorage() {
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations));
+    } catch (e) {
+        console.error('Failed to save conversations to storage:', e);
+    }
+}
+
+function saveCurrentConversation(messages) {
+    if (!currentConversationId) return;
+    
+    const title = generateConversationTitle(messages);
+    conversations[currentConversationId] = {
+        id: currentConversationId,
+        title: title,
+        messages: messages,
+        model: currentModel,
+        updatedAt: new Date().toISOString()
+    };
+    saveConversationsToStorage();
+    renderChatHistory();
+}
+
+function generateConversationTitle(messages) {
+    // Use first user message as title, truncated
+    const firstUserMsg = messages.find(m => m.role === 'user');
+    if (firstUserMsg) {
+        const text = firstUserMsg.content.replace(/\[Uploaded PDF:.*?\]/g, '').trim();
+        return text.length > 40 ? text.substring(0, 40) + '...' : text || 'New Chat';
+    }
+    return 'New Chat';
+}
+
+function renderChatHistory() {
+    const historyContainer = document.getElementById('chat-history');
+    if (!historyContainer) return;
+    
+    // Sort conversations by updatedAt, most recent first
+    const sortedConversations = Object.values(conversations)
+        .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+    
+    if (sortedConversations.length === 0) {
+        historyContainer.innerHTML = '<p class="no-history">No chat history</p>';
+        return;
+    }
+    
+    historyContainer.innerHTML = '';
+    sortedConversations.forEach(conv => {
+        const item = document.createElement('div');
+        item.className = 'chat-history-item' + (conv.id === currentConversationId ? ' active' : '');
+        item.onclick = () => loadConversation(conv.id);
+        
+        const title = document.createElement('span');
+        title.className = 'chat-history-title';
+        title.textContent = conv.title;
+        
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'chat-history-delete';
+        deleteBtn.textContent = 'x';
+        deleteBtn.onclick = (e) => {
+            e.stopPropagation();
+            deleteConversation(conv.id);
+        };
+        
+        item.appendChild(title);
+        item.appendChild(deleteBtn);
+        historyContainer.appendChild(item);
+    });
+}
+
+function loadConversation(conversationId) {
+    const conv = conversations[conversationId];
+    if (!conv) return;
+    
+    currentConversationId = conversationId;
+    currentModel = conv.model || currentModel;
+    
+    // Update model selector
+    const select = document.getElementById('model-select');
+    if (select && conv.model) {
+        select.value = conv.model;
+        updateCurrentModelDisplay();
+    }
+    
+    // Clear and render messages
+    const messagesContainer = document.getElementById('messages-container');
+    messagesContainer.innerHTML = '';
+    
+    conv.messages.forEach(msg => {
+        addMessage(msg.role, msg.content, false);
+    });
+    
+    renderChatHistory();
+}
+
+function deleteConversation(conversationId) {
+    delete conversations[conversationId];
+    saveConversationsToStorage();
+    
+    if (currentConversationId === conversationId) {
+        startNewChat();
+    }
+    
+    renderChatHistory();
+}
+
+function getCurrentMessages() {
+    const messagesContainer = document.getElementById('messages-container');
+    const messageElements = messagesContainer.querySelectorAll('.message');
+    const messages = [];
+    
+    messageElements.forEach(el => {
+        const role = el.classList.contains('user') ? 'user' : 'assistant';
+        const contentEl = el.querySelector('.message-content');
+        if (contentEl) {
+            // Get text content, removing progress indicators
+            const clone = contentEl.cloneNode(true);
+            const progressContainer = clone.querySelector('.progress-container');
+            if (progressContainer) progressContainer.remove();
+            messages.push({ role, content: clone.textContent.trim() });
+        }
+    });
+    
+    return messages;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     loadModels();
+    loadConversationsFromStorage();
+    renderChatHistory();
 });
