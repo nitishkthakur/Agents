@@ -5,19 +5,19 @@
 }
 
 :root {
-    --bg-primary: #1a1a2e;
-    --bg-secondary: #16213e;
-    --bg-tertiary: #0f3460;
-    --bg-input: #1f2937;
+    --bg-primary: #1a1a1a;
+    --bg-secondary: #242424;
+    --bg-tertiary: #2d2d2d;
+    --bg-input: #333333;
     --text-primary: #e4e4e7;
     --text-secondary: #a1a1aa;
     --text-muted: #71717a;
     --accent: #3b82f6;
     --accent-hover: #2563eb;
-    --border: #374151;
-    --user-msg-bg: #1e3a5f;
-    --assistant-msg-bg: #1f2937;
-    --code-bg: #0d1117;
+    --border: #404040;
+    --user-msg-bg: #3a3a3a;
+    --assistant-msg-bg: #2a2a2a;
+    --code-bg: #1a1a1a;
     --success: #22c55e;
     --error: #ef4444;
     --warning: #f59e0b;
@@ -338,6 +338,71 @@ body {
 
 .tool-indicator.complete {
     color: var(--success);
+}
+
+.progress-container {
+    margin-bottom: 12px;
+    padding: 12px;
+    background-color: var(--bg-tertiary);
+    border-radius: 8px;
+    border-left: 3px solid var(--accent);
+}
+
+.progress-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 6px 0;
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border);
+}
+
+.progress-step:last-child {
+    border-bottom: none;
+}
+
+.progress-step.active {
+    color: var(--warning);
+}
+
+.progress-step.complete {
+    color: var(--text-muted);
+}
+
+.progress-step-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    background-color: var(--accent);
+    color: white;
+    border-radius: 50%;
+    font-size: 0.6875rem;
+    font-weight: 600;
+}
+
+.progress-step.complete .progress-step-number {
+    background-color: var(--success);
+}
+
+.progress-step.active .progress-step-number {
+    background-color: var(--warning);
+}
+
+.progress-step-text {
+    flex: 1;
+    line-height: 1.4;
+}
+
+.progress-header {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 8px;
 }
 
 .input-container {
