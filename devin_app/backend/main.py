@@ -63,11 +63,18 @@ def get_tavily_client() -> Optional[TavilyClient]:
 
 def internet_search(
     query: str,
-    max_results: int = 5,
+    max_results: int = 10,
     topic: Literal["general", "news", "finance"] = "general",
     include_raw_content: bool = False,
 ) -> str:
-    """Run a web search using Tavily."""
+    """Search the web using Tavily for current information.
+    
+    Args:
+        query: Search query string.
+        max_results: Number of results to return (default 10).
+        topic: Category to search - general, news, or finance (default general).
+        include_raw_content: Include raw HTML content in results (default False).
+    """
     client = get_tavily_client()
     if not client:
         return "Web search is not available. TAVILY_API_KEY not configured."
@@ -85,7 +92,12 @@ def internet_search(
 
 
 def save_artifact(filename: str, content: str) -> str:
-    """Save an artifact file to disk."""
+    """Save content to an artifact file.
+    
+    Args:
+        filename: Name of the file to save.
+        content: Content to write to the file.
+    """
     filepath = ARTIFACTS_DIR / filename
     with open(filepath, "w") as f:
         f.write(content)
@@ -101,7 +113,11 @@ def list_artifacts() -> str:
 
 
 def read_artifact(filename: str) -> str:
-    """Read an artifact file from disk."""
+    """Read content from an artifact file.
+    
+    Args:
+        filename: Name of the file to read.
+    """
     filepath = ARTIFACTS_DIR / filename
     if not filepath.exists():
         return f"Artifact {filename} not found."
@@ -116,7 +132,8 @@ You can:
 2. Save artifacts (markdown files, code, notes) to disk using save_artifact
 3. List and read previously saved artifacts
 4. Use the built-in filesystem tools for managing context
-
+5. Spawn subagents when needed for specialized tasks - or if parallel execution of multiple tasks is required. 
+6. If the user asks you to be careful or critique your task, use a subagent to give you targeted feedback on how to improve your work. Then, improve your answer based on the feedback.
 When the user asks you to create or save something, use the save_artifact tool.
 When searching for information, use the internet_search tool.
 
@@ -208,9 +225,14 @@ async def chat(request: ChatRequest):
             llm_call_count = 0
             current_step = ""
             
+            # Get recursion limit from config
+            config = load_config()
+            recursion_limit = config.get("recursion_limit", 150)
+            
             async for event in agent.astream_events(
                 {"messages": messages},
-                version="v2"
+                version="v2",
+                config={"recursion_limit": recursion_limit}
             ):
                 kind = event.get("event")
                 

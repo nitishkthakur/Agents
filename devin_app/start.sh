@@ -70,6 +70,15 @@ fi
 
 echo "Starting backend server on port $BACKEND_PORT..."
 cd "$BACKEND_DIR"
+if [ -f "$BACKEND_DIR/.venv/bin/activate" ]; then
+    source "$BACKEND_DIR/.venv/bin/activate"
+elif [ -f "$BACKEND_DIR/venv/bin/activate" ]; then
+    source "$BACKEND_DIR/venv/bin/activate"
+elif [ -f "$BACKEND_DIR/env/bin/activate" ]; then
+    source "$BACKEND_DIR/env/bin/activate"
+else
+    echo "Warning: No backend virtual environment found (.venv, venv, env)."
+fi
 python3 -m uvicorn main:app --host 0.0.0.0 --port $BACKEND_PORT &
 BACKEND_PID=$!
 

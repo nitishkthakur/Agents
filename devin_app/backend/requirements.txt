@@ -14,3 +14,4 @@ Pillow>=10.0.0
 reportlab>=4.0.0
 aiofiles>=23.0.0
 sse-starlette>=2.0.0
+langchain-ollama>=0.1.0
